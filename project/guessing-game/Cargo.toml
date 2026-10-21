@@ -10,6 +10,7 @@ eframe = "0.33"
 rodio = { version = "0.23.0", default-features = false, features = ["playback"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+egui_extras = { version = "0.33", features = ["svg"] }
 
 # 仅在 Windows 构建时使用：把 icon.ico 和版本信息写进 exe 资源段
 [target.'cfg(windows)'.build-dependencies]

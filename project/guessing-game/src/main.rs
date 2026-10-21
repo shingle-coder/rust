@@ -115,6 +115,25 @@ fn draw_confetti(ui: &egui::Ui, rect: egui::Rect, confetti: &[Confetti]) {
     }
 }
 
+// =============================================================================
+// 内置 SVG 图标
+// -----------------------------------------------------------------------------
+// 用 include_bytes! 把图标打进二进制，运行时不需要外部文件。
+// SVG 由 egui_extras 的 svg loader（resvg）解码，可按任意尺寸缩放，
+// 再用 tint 换成界面需要的颜色（源文件本身画成白色）。
+// =============================================================================
+
+/// 加载一个内置 SVG 图标，按目标尺寸缩放并着色
+fn icon(
+    source: egui::ImageSource<'static>,
+    size: f32,
+    tint: egui::Color32,
+) -> egui::Image<'static> {
+    egui::Image::new(source)
+        .fit_to_exact_size(egui::vec2(size, size))
+        .tint(tint)
+}
+
 // Default trait：Rust 中标准的"给一个合理初值"方式
 // eframe::run_native 需要 App 的 Box，这里 Default::default() 会调 new_game()
 impl Default for GuessingGame {
@@ -198,10 +217,10 @@ impl GuessingGame {
         .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .show(ctx, |ui| {
             ui.set_min_width(240.0);
-            ui.label("玩家名字（最多 8 个字）");
+            ui.label(format!("玩家名字（最多 {} 个字）", storage::MAX_NAME_LEN));
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.player_input)
-                    .char_limit(8)
+                    .char_limit(storage::MAX_NAME_LEN)
                     .desired_width(f32::INFINITY)
                     .hint_text("例如：妞妞"),
             );
@@ -261,31 +280,30 @@ impl GuessingGame {
         }
 
         if confirm {
-            let name = self.player_input.trim().to_string();
-            if name.is_empty() {
-                self.player_error = Some("名字不能为空".into());
-                return;
-            }
             let except = (mode == PlayerDialog::Rename).then(|| self.store.current.clone());
-            if self.store.name_taken(&name, except.as_deref()) {
-                self.player_error = Some("这个名字已经有人用了".into());
-                return;
-            }
-            match mode {
-                PlayerDialog::Add => {
-                    self.store.players.push(storage::Player::new(&name));
-                    self.switch_player(name);
-                }
-                PlayerDialog::Rename => {
-                    if let Some(player) = self.store.current_player_mut() {
-                        player.name = name.clone();
+            match self
+                .store
+                .validate_name(&self.player_input, except.as_deref())
+            {
+                Err(err) => self.player_error = Some(err.message().into()),
+                Ok(name) => {
+                    match mode {
+                        PlayerDialog::Add => {
+                            self.store.players.push(storage::Player::new(&name));
+                            self.switch_player(name);
+                        }
+                        PlayerDialog::Rename => {
+                            if let Some(player) = self.store.current_player_mut() {
+                                player.name = name.clone();
+                            }
+                            self.store.current = name;
+                            self.store.save();
+                        }
                     }
-                    self.store.current = name;
-                    self.store.save();
+                    self.player_dialog = None;
+                    self.player_delete_confirm = false;
                 }
             }
-            self.player_dialog = None;
-            self.player_delete_confirm = false;
         }
     }
 
@@ -333,7 +351,7 @@ impl GuessingGame {
         // 先做合法性校验
         match trimmed.parse::<u32>() {
             Ok(n) if n < Self::MIN || n > Self::MAX => {
-                self.last_hint = format!("⚠ 只能选 {}~{} 之间的数字哦", Self::MIN, Self::MAX);
+                self.last_hint = format!("只能选 {}~{} 之间的数字哦", Self::MIN, Self::MAX);
                 if let Some(audio) = &self.audio {
                     audio.play_miss();
                 }
@@ -361,7 +379,7 @@ impl GuessingGame {
                         // 记录成绩：最好成绩 / 局数 / 最近记录
                         self.record_win();
                         &format!(
-                            "🎉 太棒啦！答案就是 {}，你一共猜了 {} 次！",
+                            "太棒啦！答案就是 {}，你一共猜了 {} 次！",
                             self.secret, self.attempts
                         ) as &str
                     }
@@ -380,7 +398,7 @@ impl GuessingGame {
             }
 
             Err(_) => {
-                self.last_hint = "⚠ 先输入 1 ~ 100 的数字，再点「我猜！」吧～".into();
+                self.last_hint = "先输入 1 ~ 100 的数字，再点「我猜！」吧～".into();
                 if let Some(audio) = &self.audio {
                     audio.play_miss();
                 }
@@ -394,9 +412,9 @@ impl GuessingGame {
     /// 根据 hint 文案返回对应颜色（UI 侧用）
     /// 颜色含义：绿=赢，黄=非法输入，蓝=要更大，红=要更小
     fn hint_color(hint: &str) -> egui::Color32 {
-        if hint.contains("🎉") {
+        if hint.starts_with("太棒啦") {
             egui::Color32::from_rgb(110, 235, 165)
-        } else if hint.starts_with("⚠") {
+        } else if hint.starts_with("只能选") || hint.starts_with("先输入") {
             egui::Color32::from_rgb(255, 205, 90)
         } else if hint.contains("再大") {
             egui::Color32::from_rgb(120, 200, 255)
@@ -689,16 +707,23 @@ impl eframe::App for GuessingGame {
                         if !self.won {
                             ui.add_space(12.0);
                             ui.label(
-                                egui::RichText::new("按回车，或点「🙋 我猜！」")
+                                egui::RichText::new("按回车，或点「我猜！」")
                                     .size(12.0)
                                     .color(egui::Color32::from_rgb(130, 135, 160)),
                             );
                             ui.add_space(4.0);
-                            ui.label(
-                                egui::RichText::new("加油，你一定可以猜到！💪")
-                                    .size(12.0)
-                                    .color(egui::Color32::from_rgb(170, 150, 255)),
-                            );
+                            ui.horizontal(|ui| {
+                                ui.add(icon(
+                                    egui::include_image!("../assets/icons/flame.svg"),
+                                    14.0,
+                                    egui::Color32::from_rgb(255, 160, 90),
+                                ));
+                                ui.label(
+                                    egui::RichText::new("加油，你一定可以猜到！")
+                                        .size(12.0)
+                                        .color(egui::Color32::from_rgb(170, 150, 255)),
+                                );
+                            });
                         }
                     });
             });
@@ -713,17 +738,32 @@ impl eframe::App for GuessingGame {
                 .inner_margin(egui::Margin::symmetric(20, 16))
                 .show(ui, |ui| {
                     // 顶部标题 + 一句引导语
-                    ui.heading(
-                        egui::RichText::new("🎯 妞妞猜数字")
-                            .size(26.0)
-                            .color(egui::Color32::from_rgb(245, 245, 255)),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.add(icon(
+                            egui::include_image!("../assets/icons/target.svg"),
+                            26.0,
+                            egui::Color32::from_rgb(255, 205, 90),
+                        ));
+                        ui.add_space(4.0);
+                        ui.heading(
+                            egui::RichText::new("妞妞猜数字")
+                                .size(26.0)
+                                .color(egui::Color32::from_rgb(245, 245, 255)),
+                        );
+                    });
                     ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new("🐰 妞妞把数字藏好了，快来找找看！")
-                            .size(13.0)
-                            .color(egui::Color32::from_rgb(180, 165, 255)),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.add(icon(
+                            egui::include_image!("../assets/icons/rabbit.svg"),
+                            16.0,
+                            egui::Color32::from_rgb(180, 165, 255),
+                        ));
+                        ui.label(
+                            egui::RichText::new("妞妞把数字藏好了，快来找找看！")
+                                .size(13.0)
+                                .color(egui::Color32::from_rgb(180, 165, 255)),
+                        );
+                    });
                     ui.add_space(12.0);
 
                     // 深色反馈卡片：猜对时背景变绿色
@@ -745,15 +785,23 @@ impl eframe::App for GuessingGame {
                                         self.spawn_confetti();
                                     }
                                     ui.add_space(4.0);
-                                    ui.label(
-                                        egui::RichText::new(format!(
-                                            "🎉 太棒啦！答案是 {}",
-                                            self.secret
-                                        ))
-                                        .size(30.0 * (1.0 + 0.12 * self.pop))
-                                        .color(egui::Color32::from_rgb(120, 240, 150))
-                                        .strong(),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.add(icon(
+                                            egui::include_image!("../assets/icons/trophy.svg"),
+                                            26.0,
+                                            egui::Color32::from_rgb(255, 205, 90),
+                                        ));
+                                        ui.add_space(2.0);
+                                        ui.label(
+                                            egui::RichText::new(format!(
+                                                "太棒啦！答案是 {}",
+                                                self.secret
+                                            ))
+                                            .size(30.0 * (1.0 + 0.12 * self.pop))
+                                            .color(egui::Color32::from_rgb(120, 240, 150))
+                                            .strong(),
+                                        );
+                                    });
                                     ui.add_space(4.0);
                                     ui.label(
                                         egui::RichText::new(format!(
@@ -767,8 +815,15 @@ impl eframe::App for GuessingGame {
                                     if ui
                                         .add_sized(
                                             [190.0, 48.0],
-                                            egui::Button::new(
-                                                egui::RichText::new("🔄 再玩一次")
+                                            egui::Button::image_and_text(
+                                                icon(
+                                                    egui::include_image!(
+                                                        "../assets/icons/refresh.svg"
+                                                    ),
+                                                    20.0,
+                                                    egui::Color32::from_rgb(20, 45, 30),
+                                                ),
+                                                egui::RichText::new("再玩一次")
                                                     .size(20.0)
                                                     .color(egui::Color32::from_rgb(20, 45, 30))
                                                     .strong(),
@@ -783,11 +838,18 @@ impl eframe::App for GuessingGame {
                                 } else {
                                     // ===== 游戏中画面 =====
                                     let color = Self::hint_color(&self.last_hint);
-                                    ui.label(
-                                        egui::RichText::new("🐰 妞妞说")
-                                            .size(12.0)
-                                            .color(egui::Color32::from_rgb(150, 155, 190)),
-                                    );
+                                    ui.horizontal(|ui| {
+                                        ui.add(icon(
+                                            egui::include_image!("../assets/icons/rabbit.svg"),
+                                            14.0,
+                                            egui::Color32::from_rgb(150, 155, 190),
+                                        ));
+                                        ui.label(
+                                            egui::RichText::new("妞妞说")
+                                                .size(12.0)
+                                                .color(egui::Color32::from_rgb(150, 155, 190)),
+                                        );
+                                    });
                                     ui.add_space(2.0);
                                     // 每次提交文字先放大再回弹
                                     ui.label(
@@ -819,8 +881,15 @@ impl eframe::App for GuessingGame {
                                         // 圆角胶囊按钮：明亮的黄色更吸引小朋友
                                         let guess_btn = ui.add_sized(
                                             [140.0, 50.0],
-                                            egui::Button::new(
-                                                egui::RichText::new("🙋 我猜！")
+                                            egui::Button::image_and_text(
+                                                icon(
+                                                    egui::include_image!(
+                                                        "../assets/icons/hand.svg"
+                                                    ),
+                                                    20.0,
+                                                    egui::Color32::from_rgb(45, 32, 10),
+                                                ),
+                                                egui::RichText::new("我猜！")
                                                     .size(20.0)
                                                     .color(egui::Color32::from_rgb(45, 32, 10))
                                                     .strong(),
@@ -929,7 +998,9 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| {
             // cc = CreationContext，在 App 构造前只调一次
-            // 这里加载中文字体，之后 App 的每帧 update 就都能渲染中文了
+            // 注册图片加载器：PNG / SVG 都走这里，SVG 需要 egui_extras 的 svg 特性
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            // 加载中文字体，之后 App 的每帧 update 就都能渲染中文了
             load_chinese_font(&cc.egui_ctx);
 
             // 界面里的文字/配色都是按深色底设计的，固定深色主题；

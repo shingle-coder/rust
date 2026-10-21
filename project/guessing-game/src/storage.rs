@@ -41,6 +41,28 @@ impl Player {
     }
 }
 
+/// 玩家名字长度上限（按字符数算，一个汉字算一个字）
+pub const MAX_NAME_LEN: usize = 8;
+
+/// 玩家名字校验失败的原因
+#[derive(Debug, PartialEq, Eq)]
+pub enum NameError {
+    Empty,
+    TooLong,
+    Taken,
+}
+
+impl NameError {
+    /// 给界面显示的提示文案
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::Empty => "名字不能为空",
+            Self::TooLong => "名字最多 8 个字",
+            Self::Taken => "这个名字已经有人用了",
+        }
+    }
+}
+
 /// 整个存档
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct SaveData {
@@ -90,6 +112,21 @@ impl SaveData {
         self.players
             .iter()
             .any(|p| p.name == name && Some(p.name.as_str()) != except)
+    }
+
+    /// 校验玩家输入的名字，成功返回去掉首尾空白后的名字
+    pub fn validate_name(&self, raw: &str, except: Option<&str>) -> Result<String, NameError> {
+        let name = raw.trim();
+        if name.is_empty() {
+            return Err(NameError::Empty);
+        }
+        if name.chars().count() > MAX_NAME_LEN {
+            return Err(NameError::TooLong);
+        }
+        if self.name_taken(name, except) {
+            return Err(NameError::Taken);
+        }
+        Ok(name.to_string())
     }
 
     /// 写入磁盘；失败不影响游戏（例如无权限时静默跳过）
@@ -142,7 +179,80 @@ fn data_dir() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Player, SaveData};
+    use super::{MAX_NAME_LEN, NameError, Player, SaveData};
+
+    /// 造一份有两个玩家的存档
+    fn sample() -> SaveData {
+        let mut data = SaveData::default();
+        data.players.push(Player::new("小A"));
+        data.players.push(Player::new("小B"));
+        data.current = "小A".into();
+        data
+    }
+
+    #[test]
+    fn validate_name_trims_surrounding_spaces() {
+        let data = sample();
+        assert_eq!(data.validate_name("  小C  ", None).as_deref(), Ok("小C"));
+    }
+
+    #[test]
+    fn validate_name_rejects_empty_and_blank() {
+        let data = sample();
+        assert_eq!(data.validate_name("", None), Err(NameError::Empty));
+        assert_eq!(data.validate_name("   ", None), Err(NameError::Empty));
+        assert_eq!(data.validate_name("\t\n", None), Err(NameError::Empty));
+    }
+
+    #[test]
+    fn validate_name_rejects_duplicates() {
+        let data = sample();
+        assert_eq!(data.validate_name("小A", None), Err(NameError::Taken));
+        assert_eq!(data.validate_name(" 小B ", None), Err(NameError::Taken));
+    }
+
+    #[test]
+    fn validate_name_ignores_self_when_renaming() {
+        let data = sample();
+        // 改名时把首尾空格去掉后和原名相同，应当允许
+        assert_eq!(
+            data.validate_name("  小A ", Some("小A")).as_deref(),
+            Ok("小A")
+        );
+    }
+
+    #[test]
+    fn validate_name_accepts_exactly_max_length() {
+        let data = sample();
+        let name = "一".repeat(MAX_NAME_LEN);
+        assert_eq!(
+            data.validate_name(&name, None).as_deref(),
+            Ok(name.as_str())
+        );
+    }
+
+    #[test]
+    fn validate_name_rejects_too_long() {
+        let data = sample();
+        let name = "一".repeat(MAX_NAME_LEN + 1);
+        assert_eq!(data.validate_name(&name, None), Err(NameError::TooLong));
+    }
+
+    #[test]
+    fn validate_name_counts_characters_not_bytes() {
+        // 8 个汉字是 24 字节，按字符数应当通过
+        let data = sample();
+        let name = "妞".repeat(8);
+        assert_eq!(name.len(), 24);
+        assert!(data.validate_name(&name, None).is_ok());
+    }
+
+    #[test]
+    fn name_error_has_message() {
+        assert_eq!(NameError::Empty.message(), "名字不能为空");
+        assert_eq!(NameError::TooLong.message(), "名字最多 8 个字");
+        assert_eq!(NameError::Taken.message(), "这个名字已经有人用了");
+    }
 
     #[test]
     fn first_win_sets_best() {
