@@ -21,6 +21,13 @@ jobs:
       - name: 打包
         run: ./scripts/package-macos.sh --dmg
 
+      # upload-artifact 传输非 ASCII 文件名时会丢名字（变成 default.dmg），
+      # 所以 CI 里先改成 ASCII 名再上传；本地打包仍保留中文名。
+      - name: 重命名 dmg
+        run: |
+          VERSION="$(grep -m1 '^version' project/guessing-game/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')"
+          mv "dist/妞妞猜数字.dmg" "dist/GuessingGame-${VERSION}-macos.dmg"
+
       - uses: actions/upload-artifact@v4
         with:
           name: macos
