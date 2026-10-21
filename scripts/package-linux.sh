@@ -19,7 +19,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT/project/guessing-game"
 BIN_NAME="guessing-game"
 APP_NAME="GuessingGame"
-DISPLAY_NAME="猜数字"
+DISPLAY_NAME="妞妞猜数字"
 DIST="$ROOT/dist"
 
 VERSION="$(grep -m1 '^version' "$PROJECT/Cargo.toml" | sed -E 's/.*"(.*)".*/\1/')"
@@ -53,7 +53,7 @@ cat > "$PORTABLE/$APP_NAME.desktop" <<EOF
 Type=Application
 Name=$DISPLAY_NAME
 Name[zh_CN]=$DISPLAY_NAME
-Comment=猜数字小游戏
+Comment=妞妞猜数字小游戏
 Exec=$APP_NAME
 Icon=$APP_NAME
 Terminal=false

@@ -21,8 +21,8 @@ fn main() {
     res.set_version_info(winres::VersionInfo::PRODUCTVERSION, ver);
 
     // 属性 -> 详细信息 里显示的字段
-    res.set("ProductName", "GuessingGame");
-    res.set("FileDescription", "Guessing Game");
+    res.set("ProductName", "妞妞猜数字");
+    res.set("FileDescription", "妞妞猜数字");
     res.set("OriginalFilename", "GuessingGame.exe");
     res.set("LegalCopyright", "");
 

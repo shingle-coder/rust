@@ -11,8 +11,8 @@
 set -euo pipefail
 
 # ---------- 可配置项 ----------
-APP_NAME="GuessingGame"                 # .app 文件名（建议 ASCII）
-DISPLAY_NAME="猜数字"                    # Finder 里显示的名称
+APP_NAME="妞妞猜数字"                    # .app / .dmg 文件名（即 Finder 里看到的名字）
+DISPLAY_NAME="妞妞猜数字"                # 菜单栏与卷标显示的名称
 BUNDLE_ID="com.tanzhenxing.guessing-game"
 MIN_MACOS="11.0"
 PKG_NAME="guessing-game"                # Cargo 包名

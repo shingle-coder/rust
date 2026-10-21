@@ -14,7 +14,7 @@
   #define AppName "GuessingGame"
 #endif
 #ifndef AppDisplayName
-  #define AppDisplayName "猜数字"
+  #define AppDisplayName "妞妞猜数字"
 #endif
 #ifndef AppVersion
   #define AppVersion "0.1.0"
@@ -38,7 +38,7 @@ AppName={#AppDisplayName}
 AppVersion={#AppVersion}
 AppVerName={#AppDisplayName} {#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={autopf}\{#AppName}
+DefaultDirName={autopf}\{#AppDisplayName}
 DefaultGroupName={#AppDisplayName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
