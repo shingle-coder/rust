@@ -338,3 +338,72 @@ mod ui {
         }
     }
 }
+
+// =============================================================================
+// 单元测试：依赖升级（egui 0.37 / rand 0.10）后的兼容性
+// =============================================================================
+
+#[cfg(test)]
+mod upgrade {
+    use crate::{GuessingGame, storage::SaveData};
+    use eframe::egui;
+
+    /// 不打开音频设备、不读写真实存档的测试实例
+    fn test_game() -> GuessingGame {
+        GuessingGame {
+            secret: 42,
+            guess: String::new(),
+            attempts: 0,
+            last_hint: "在 1 ~ 100 里挑个数字，试试看吧！".into(),
+            min_bound: GuessingGame::MIN,
+            max_bound: GuessingGame::MAX,
+            won: false,
+            shown_excluded: 0.0,
+            pop: 0.0,
+            confetti: Vec::new(),
+            confetti_pending: false,
+            audio: None,
+            store: SaveData::default().ensure_player(),
+            player_dialog: None,
+            player_input: String::new(),
+            player_error: None,
+            player_delete_confirm: false,
+        }
+    }
+
+    #[test]
+    fn random_secret_stays_in_range() {
+        // rand 0.10 把 random_range 移到了 RngExt，范围是闭区间
+        for _ in 0..10_000 {
+            let secret = GuessingGame::random_secret();
+            assert!(
+                (GuessingGame::MIN..=GuessingGame::MAX).contains(&secret),
+                "随机答案 {secret} 超出 1 ~ 100"
+            );
+        }
+    }
+
+    #[test]
+    fn ui_frame_renders_without_panicking() {
+        // egui 0.37 的入口从 update(Context) 改为 ui(Ui)：
+        // 这里用无窗口的测试上下文完整画一帧，验证面板/样式迁移没有运行时问题
+        let mut game = test_game();
+        egui::__run_test_ui(|ui| game.draw(ui));
+
+        assert_eq!(game.secret, 42);
+        assert!(!game.won);
+    }
+
+    #[test]
+    fn win_frame_spawns_confetti_on_first_draw() {
+        let mut game = test_game();
+        game.won = true;
+        game.attempts = 5;
+        game.confetti_pending = true;
+
+        egui::__run_test_ui(|ui| game.draw(ui));
+
+        assert!(!game.confetti_pending, "胜利帧应当消费掉彩纸待生成标记");
+        assert!(!game.confetti.is_empty(), "胜利帧应当生成彩纸");
+    }
+}

@@ -375,11 +375,16 @@ impl GuessingGame {
     const MIN: u32 = 1;
     const MAX: u32 = 100;
 
+    /// 随机生成 1 ~ 100 的答案（rand 0.10 的 RangeInclusive 语义）
+    fn random_secret() -> u32 {
+        rand::rng().random_range(Self::MIN..=Self::MAX)
+    }
+
     /// 创建一局新游戏，所有状态重置，随机生成 secret
     fn new_game() -> Self {
         Self {
             // rand 0.10 的 random_range 是 RangeInclusive（..=）
-            secret: rand::rng().random_range(Self::MIN..=Self::MAX),
+            secret: Self::random_secret(),
             guess: String::new(),
             attempts: 0,
             last_hint: "在 1 ~ 100 里挑个数字，试试看吧！".into(),
@@ -675,11 +680,19 @@ fn sanitize_guess(raw: &str) -> Option<String> {
 }
 
 // =============================================================================
-// eframe::App 实现 —— 每帧被 egui 调用一次 update
+// eframe::App 实现 —— 每帧被 egui 调用一次 ui
 // =============================================================================
 
 impl eframe::App for GuessingGame {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.draw(ui);
+    }
+}
+
+impl GuessingGame {
+    /// 绘制整帧界面。
+    /// 拆成独立方法，测试里不用创建窗口也能直接绘制一帧。
+    fn draw(&mut self, ui: &mut egui::Ui) {
         // egui 0.37 起 eframe 的入口是 Ui，需要从 Ui 上取回 Context
         let ctx = ui.ctx().clone();
         // ---------- 动画推进：每帧按真实耗时更新状态 ----------
