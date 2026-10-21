@@ -11,7 +11,7 @@
 // 主要 Rust 知识点：
 //   结构体 + enum 管理游戏状态
 //   Default trait 提供初始值
-//   rand 0.9 的 random_range / Rng trait
+//   rand 0.10 的 random_range / RngExt trait
 //   egui / eframe 即时模式 GUI
 // =============================================================================
 
@@ -24,7 +24,7 @@ mod storage;
 
 use audio::Audio;
 use eframe::egui;
-use rand::Rng;
+use rand::RngExt;
 use storage::SaveData;
 
 /// 玩家弹窗的两种模式
@@ -378,7 +378,7 @@ impl GuessingGame {
     /// 创建一局新游戏，所有状态重置，随机生成 secret
     fn new_game() -> Self {
         Self {
-            // rand 0.9 的 random_range 是 RangeInclusive（..=）
+            // rand 0.10 的 random_range 是 RangeInclusive（..=）
             secret: rand::rng().random_range(Self::MIN..=Self::MAX),
             guess: String::new(),
             attempts: 0,
@@ -679,7 +679,9 @@ fn sanitize_guess(raw: &str) -> Option<String> {
 // =============================================================================
 
 impl eframe::App for GuessingGame {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // egui 0.37 起 eframe 的入口是 Ui，需要从 Ui 上取回 Context
+        let ctx = ui.ctx().clone();
         // ---------- 动画推进：每帧按真实耗时更新状态 ----------
         let dt = ctx.input(|i| i.stable_dt).clamp(0.0, 0.05);
 
@@ -709,10 +711,10 @@ impl eframe::App for GuessingGame {
         }
 
         // 背景画在最底层，面板自身设为透明，让渐变透出来
-        paint_background(ctx);
+        paint_background(&ctx);
 
         // 统一控件风格：圆角、奶油白底、暖棕文字
-        ctx.style_mut(|style| {
+        ctx.all_styles_mut(|style| {
             let r = egui::CornerRadius::same(15);
             style.visuals.widgets.inactive.corner_radius = r;
             style.visuals.widgets.hovered.corner_radius = r;
@@ -743,12 +745,12 @@ impl eframe::App for GuessingGame {
         });
 
         // ---------- 左侧面板：妞妞的战况 ----------
-        egui::SidePanel::left("stats_panel")
+        egui::Panel::left("stats_panel")
             .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(12, 0)))
             .resizable(true)
-            .default_width(238.0)
-            .width_range(210.0..=300.0)
-            .show(ctx, |ui| {
+            .default_size(238.0)
+            .size_range(egui::Rangef::new(210.0, 300.0))
+            .show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -1003,12 +1005,12 @@ impl eframe::App for GuessingGame {
             });
 
         // ---------- 玩家设置弹窗 ----------
-        self.show_player_dialog(ctx);
+        self.show_player_dialog(&ctx);
 
         // ---------- 中央区域：主游戏界面 ----------
-        egui::CentralPanel::default()
+        egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(18, 0)))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 ui.add_space(16.0);
 
                 let main_card = egui::Frame::new()
@@ -1161,7 +1163,7 @@ impl eframe::App for GuessingGame {
                                                     // 文字与边框留出内边距，光标不再贴边
                                                     .margin(egui::Margin::symmetric(14, 12))
                                                     // 单行文字在 52px 高的框内垂直居中
-                                                    .vertical_align(egui::Align::Center),
+                                                    .align(egui::Align2::LEFT_CENTER),
                                             );
                                             // 输入框只接受 1~100 的整数：
                                             // 清洗后不合法就退回上一次的合法内容
@@ -1241,12 +1243,8 @@ impl eframe::App for GuessingGame {
 // egui 默认打包的字体只有拉丁字形，中文会显示为空白/方块 □，
 // 所以必须额外提供一个带 CJK 的字体。
 //
-// 官方文档（epaint 0.33.3 FontData）：
-//   FontData { font: Cow<'static, [u8]>, index: u32, tweak: FontTweak }
-//   - font  ：字体文件字节
-//   - index ：TTC 集合里的子字体索引，单文件 TTF 用 0 即可
-// 用法即：FontDefinitions::default() → font_data.insert → families 里插到最前面
-//        → ctx.set_fonts(fonts)
+// 官方文档（epaint 0.37 FontData）：
+//   FontData::from_static(bytes) 直接借用静态字节，内部用 Arc 共享
 //
 // 字体文件通过 include_bytes! 在编译期嵌入二进制：
 //   - 发布后把可执行文件单独拷给别人也能正常显示中文
@@ -1265,13 +1263,8 @@ fn load_chinese_font(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert(
         "zh".into(),
-        egui::FontData {
-            // Cow::Borrowed，不复制这 10MB 数据
-            font: FONT_BYTES.into(),
-            index: 0,
-            tweak: Default::default(),
-        }
-        .into(),
+        // egui 0.37 的 FontData 内部改用 Arc，from_static 直接借用静态字节
+        egui::FontData::from_static(FONT_BYTES).into(),
     );
 
     // 插到字体族列表最前面 → 优先用中文字体渲染；

@@ -25,8 +25,8 @@
 | 方向 | 使用 |
 | --- | --- |
 | 语言 | Rust 2024 edition |
-| GUI | eframe / egui 0.33 |
-| 随机数 | rand 0.9 |
+| GUI | eframe / egui 0.37 |
+| 随机数 | rand 0.10 |
 | 音频 | rodio 0.23（实时合成正弦波） |
 | 序列化 | serde + serde_json |
 | 图标 | egui_extras（resvg SVG 加载） |
