@@ -42,6 +42,7 @@
 │       │   └── icons/          # 界面用 SVG 图标
 │       ├── src/
 │       │   ├── main.rs         # 界面与游戏逻辑
+│       │   ├── tests.rs        # 单元测试（输入清洗 / 配色对比度 / 图标）
 │       │   ├── audio.rs        # 音效合成
 │       │   └── storage.rs      # 玩家档案与本地存档
 │       └── build.rs            # Windows exe 图标与版本信息
@@ -75,7 +76,7 @@ cargo build -p guessing-game --release
 cargo test -p guessing-game
 ```
 
-测试覆盖输入清洗（`sanitize_guess`）与玩家数据（档案记录、排行榜、名字校验）等纯逻辑。
+测试覆盖输入清洗（`sanitize_guess`）、玩家数据（档案记录、排行榜、名字校验），以及界面相关的卡片与背景文字对比度、按钮文字对比度、卡片描边、渐变网格、背景闪光顶点和全部内置 SVG 图标的解码结果。
 
 ## 打包
 
@@ -125,6 +126,10 @@ git push origin v0.1.3
 
 ## 图标说明
 
-界面图标位于 `project/guessing-game/assets/icons/`，采用 24×24 描边风格 SVG，通过 `egui_extras` 的 `svg` 特性在运行时解码，再用 `Image::tint` 着色。图标以 `include_bytes!` 方式编译进二进制，发布后无需额外资源文件。
+界面图标位于 `project/guessing-game/assets/icons/`，采用 24×24 彩色填充的卡通风格 SVG，通过 `egui_extras` 的 `svg` 特性在运行时解码并按需缩放，不再做单色 tint 处理。图标以 `include_image!` 方式编译进二进制，发布后无需额外资源文件。
+
+界面整体是奶油色渐变背景 + 彩色圆角卡片的绘本风，文字统一为暖棕色，按钮为糖果色胶囊样式。
+
+应用图标（`icon.icns` / `icon.ico` / `icon.png`）是同一份卡通兔子插画导出的多尺寸资源，三端打包脚本会自动取用。
 
 游戏主体使用捆绑的苹方字体（`assets/fonts/PingFang-Regular.ttf`）保证中文显示，同样通过 `include_bytes!` 内嵌。
