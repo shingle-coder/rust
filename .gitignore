@@ -1,0 +1,21 @@
+# Rust 编译产物
+/target/
+**/target/
+
+# 本地打包产物（.app / .dmg / zip / setup.exe / tar.gz）
+/dist/
+
+# 子 crate 的 Cargo.lock（workspace 只在根目录维护一份）
+/project/**/Cargo.lock
+
+# macOS
+.DS_Store
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.iml
+
+# 日志与本地环境变量
+*.log
+.env

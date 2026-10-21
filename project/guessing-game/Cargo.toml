@@ -1,0 +1,13 @@
+[package]
+name = "guessing-game"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+rand = "0.9"
+eframe = "0.33"
+
+# 仅在 Windows 构建时使用：把 icon.ico 和版本信息写进 exe 资源段
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

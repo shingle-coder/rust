@@ -1,0 +1,4 @@
+[workspace]
+members = ["project/*"]
+exclude = ["project/hello-rust", "rustlings"]
+resolver = "2"
